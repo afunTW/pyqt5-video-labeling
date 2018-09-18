@@ -50,7 +50,8 @@ class VideoViewer(QWidget):
         self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.slider_video = QSlider(Qt.Horizontal)
         self.slider_video.setRange(0, 0)
-        self.label_video_err = QLabel()
+        self.label_video_status = QLabel()
+        self.label_video_status.setAlignment(Qt.AlignCenter)
 
         # set position
         self.hbox_video_slider.setContentsMargins(0, 0, 0, 0)
@@ -58,6 +59,6 @@ class VideoViewer(QWidget):
         self.hbox_video_slider.addWidget(self.slider_video)
         self.vbox_panels.addWidget(self.label_frame)
         self.vbox_panels.addLayout(self.hbox_video_slider)
-        self.vbox_panels.addWidget(self.label_video_err)
+        self.vbox_panels.addWidget(self.label_video_status)
         self.grid_root.addLayout(self.vbox_panels, 0, 0)
         self.grid_root.addLayout(self.vbox_option, 0, 1)
