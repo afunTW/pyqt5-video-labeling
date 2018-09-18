@@ -1,4 +1,7 @@
 title: 'PyQt5 video labeling viewer'
 author: 'afun'
 
+# label_color: label_color on RGB image
+# limit_nlabel: limited number of label per frame, no limit of the value is None
 label_color: !!python/tuple [255, 0, 0]
+limit_nlabel: 1

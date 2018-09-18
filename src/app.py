@@ -1,4 +1,5 @@
 import logging
+from collections import OrderedDict
 from time import sleep
 
 import cv2
@@ -12,22 +13,38 @@ from .view import VideoViewer
 
 
 class VideoApp(VideoViewer):
-    def __init__(self, videopath, title='PyQt5 video labeling viewer'):
-        super().__init__(title=title)
+    def __init__(self, videopath: str, outpath: str, **config):
         self.videopath = videopath
+        self.outpath = outpath
+        self.config = config
+        self.title = self.config.get('title', 'PyQt5 video labeling viewer')
+        super().__init__(title=self.title)
+
+        # draw config
+        self.label_color = self.config.get('label_color', (0, 0, 0))
+        self.is_drawing = False
+
+        # record config
+        self.limit_nlabel = self.config.get('limit_nlabel', None)
+        self.pt1 = self.pt2 = None
+        self.records = []
 
         # read video
         self.cap = cv2.VideoCapture(self.videopath)
         self.target_frame_idx = 0       # ready to update
         self.render_frame_idx = None    # redneded
-        self.is_play_video = False
+        self.scale_height = self.scale_width = None
+        self.is_playing_video = False
         self._update_frame()
 
-        # # widget binding
+        # widget binding
         self.slider_video.setRange(0, self.frame_count-1)
         self.slider_video.sliderMoved.connect(self.on_slider_moved)
         self.slider_video.sliderReleased.connect(self.on_slider_released)
         self.btn_play_video.clicked.connect(self.on_play_video_clicked)
+        self.label_frame.mousePressEvent = self.frame_mouse_press
+        self.label_frame.mouseMoveEvent = self.frame_mouse_move
+        self.label_frame.mouseReleaseEvent = self.frame_mouse_release
         self.show()
 
     @property
@@ -81,15 +98,15 @@ class VideoApp(VideoViewer):
             frame = self._read_frame(self.target_frame_idx)
             if frame is not None:
                 pixmap = QPixmap(self._ndarray_to_qimage(frame))
-                resize_w = int(min(pixmap.width(), self.screen.width()*0.8))
-                resize_h = int(pixmap.height() * (resize_w/pixmap.width()))
-                pixmap = pixmap.scaled(resize_w, resize_h, Qt.KeepAspectRatio)
+                self.scale_width = int(min(pixmap.width(), self.screen.width()*0.8))
+                self.scale_height = int(pixmap.height() * (self.scale_width / pixmap.width()))
+                pixmap = pixmap.scaled(self.scale_width, self.scale_height, Qt.KeepAspectRatio)
                 self.label_frame.setPixmap(pixmap)
-                self.label_frame.resize(resize_w, resize_h)
+                self.label_frame.resize(self.scale_width, self.scale_height)
                 self._update_frame_status(self.target_frame_idx)
                 self.render_frame_idx = self.target_frame_idx
                 self.slider_video.setValue(self.render_frame_idx)
-        
+
         QTimer.singleShot(1000/self.video_fps, self._update_frame)
 
     def _update_frame_status(self, frame_idx: int, err: str = ''):
@@ -107,13 +124,22 @@ class VideoApp(VideoViewer):
 
     def _play_video(self):
         """play video when button clicked"""
-        if self.is_play_video and self.video_fps:
+        if self.is_playing_video and self.video_fps:
             frame_idx = min(self.render_frame_idx+1, self.frame_count)
             if frame_idx == self.frame_count:
                 self.on_play_video_clicked()
             else:
                 self.target_frame_idx = frame_idx
         QTimer.singleShot(1/self.video_fps, self._play_video)
+
+    def _check_coor_in_frame(self, coor_x: int, coor_y: int):
+        """check the coordinate in mouse event"""
+        return 0 < coor_x < self.frame_width and 0 < coor_y < self.frame_height
+
+    def _nrecord_in_current_frame(self):
+        if self.records:
+            rest = list(filter(lambda x: x['frame_idx'] == self.render_frame_idx, self.records))
+            return len(rest) if rest else None
 
     @pyqtSlot()
     def on_slider_released(self):
@@ -128,14 +154,51 @@ class VideoApp(VideoViewer):
     @pyqtSlot()
     def on_play_video_clicked(self):
         """control to play or pause the video"""
-        self.is_play_video = not self.is_play_video
-        if self.is_play_video:
+        self.is_playing_video = not self.is_playing_video
+        if self.is_playing_video:
             self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
             self._play_video()
         else:
             self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
 
+    @pyqtSlot()
+    def frame_mouse_press(self, event):
+        if self._check_coor_in_frame(event.x(), event.y()) and not self.is_playing_video:
+            nrecords = self._nrecord_in_current_frame()
+            if self.limit_nlabel and nrecords and self.limit_nlabel <= nrecords:
+                self.logger.warning('not available to add a new record (exist=%d, limit=%d)', \
+                                    nrecords, self.limit_nlabel)
+            else:
+                self.is_drawing = True
+                self.logger.debug('press mouse at (%d, %d)', event.x(), event.y())
+                self.pt1 = (event.x(), event.y())
+
+    @pyqtSlot()
+    def frame_mouse_move(self, event):
+        if self.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
+            self.logger.debug('move mouse at (%d, %d)', event.x(), event.y())
+
+    @pyqtSlot()
+    def frame_mouse_release(self, event):
+        if self.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
+            self.is_drawing = False
+            self.logger.debug('release mouse at (%d, %d)', event.x(), event.y())
+            self.pt2 = (event.x(), event.y())
+            self.records.append(OrderedDict([
+                ('frame_idx', self.render_frame_idx), ('fps', self.video_fps),
+                ('frame_height', self.frame_height), ('frame_width', self.frame_width),
+                ('scale_height', self.scale_height), ('scale_width', self.scale_width),
+                ('x1', min(self.pt1[0], self.pt2[0])), ('y1', min(self.pt1[1], self.pt2[1])),
+                ('x2', max(self.pt1[0], self.pt2[0])), ('y2', max(self.pt1[1], self.pt2[1]))
+            ]))
+            self.pt1 = self.pt2 = None
+
+    def exports(self):
+        df_labels = pd.DataFrame().from_records(self.records)
+        df_labels.to_csv(self.outpath, index=False)
+
     def keyPressEvent(self, event):
+        """global keyboard event"""
         if event.key() in [Qt.Key_Space, Qt.Key_P]:
             self.on_play_video_clicked()
         elif event.key() in [Qt.Key_Right, Qt.Key_D]:
