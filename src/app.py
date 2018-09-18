@@ -17,9 +17,10 @@ class VideoApp(VideoViewer):
 
         # read video
         self.cap = cv2.VideoCapture(self.videopath)
-        self.current_frame_idx = None
+        self.target_frame_idx = 0       # ready to update
+        self.render_frame_idx = None    # redneded
         self.is_play_video = False
-        self._update_frame(0)
+        self._update_frame()
 
         # # widget binding
         self.slider_video.setRange(0, self.frame_count-1)
@@ -65,7 +66,7 @@ class VideoApp(VideoViewer):
         if frame_idx >= self.frame_count:
             self.logger.exception('frame index %d should be less than %d', frame_idx, self.frame_count)
         else:
-            self.current_frame_idx = frame_idx
+            self.target_frame_idx = frame_idx
             self.cap.set(1, frame_idx)
             read_success, frame = self.cap.read()
             if read_success:
@@ -73,13 +74,10 @@ class VideoApp(VideoViewer):
                 return frame
             self.logger.exception('read #%d frame failed', frame_idx)
 
-    def _update_frame(self, frame_idx: int):
-        """read and update image to label
-        Arguments:
-            frame_idx {int} -- frame index
-        """
-        if frame_idx != self.current_frame_idx:
-            frame = self._read_frame(frame_idx)
+    def _update_frame(self):
+        """read and update image to label"""
+        if self.target_frame_idx != self.render_frame_idx:
+            frame = self._read_frame(self.target_frame_idx)
             if frame is not None:
                 pixmap = QPixmap(self._ndarray_to_qimage(frame))
                 resize_w = int(min(pixmap.width(), self.screen.width()*0.8))
@@ -87,9 +85,10 @@ class VideoApp(VideoViewer):
                 pixmap = pixmap.scaled(resize_w, resize_h, Qt.KeepAspectRatio)
                 self.label_frame.setPixmap(pixmap)
                 self.label_frame.resize(resize_w, resize_h)
-                self._update_frame_status(self.current_frame_idx)
+                self._update_frame_status(self.target_frame_idx)
+                self.render_frame_idx = self.target_frame_idx
         
-        QTimer.singleShot(500, lambda: self._update_frame(self.current_frame_idx))
+        QTimer.singleShot(1000/self.video_fps, self._update_frame)
 
     def _update_frame_status(self, frame_idx: int, err: str = ''):
         """update frame status
@@ -107,18 +106,17 @@ class VideoApp(VideoViewer):
     def _play_video(self):
         """play video when button clicked"""
         if self.is_play_video and self.video_fps:
-            frame_idx = min(self.current_frame_idx+1, self.frame_count)
+            frame_idx = min(self.render_frame_idx+1, self.frame_count)
             if frame_idx == self.frame_count:
                 self.on_play_video_clicked()
             else:
-                self._update_frame(frame_idx)
-                self.current_frame_idx = frame_idx
+                self.target_frame_idx = frame_idx
         QTimer.singleShot(1/self.video_fps, self._play_video)
 
     @pyqtSlot()
     def on_slider_released(self):
         """update frame and frame status when the slider released"""
-        self._update_frame(self.slider_video.value())
+        self.target_frame_idx = self.slider_video.value()
 
     @pyqtSlot()
     def on_slider_moved(self):
@@ -134,3 +132,13 @@ class VideoApp(VideoViewer):
             self._play_video()
         else:
             self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+
+    def keyPressEvent(self, event):
+        if event.key() in [Qt.Key_Space, Qt.Key_P]:
+            self.on_play_video_clicked()
+        elif event.key() in [Qt.Key_Right, Qt.Key_D]:
+            self.target_frame_idx = min(self.target_frame_idx+self.video_fps, self.frame_count-1)
+        elif event.key() in [Qt.Key_Left, Qt.Key_A]:
+            self.target_frame_idx = max(0, self.target_frame_idx-self.video_fps)
+        else:
+            self.logger.debug('clicked %s but no related binding event', str(event.key()))
