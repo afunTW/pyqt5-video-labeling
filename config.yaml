@@ -1,0 +1,4 @@
+title: 'PyQt5 video labeling viewer'
+author: 'afun'
+
+label_color: !!python/tuple [255, 0, 0]

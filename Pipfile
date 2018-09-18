@@ -8,6 +8,7 @@ name = "pypi"
 pandas = "*"
 opencv-python = "*"
 numpy = "*"
+pyyaml = "*"
 
 [dev-packages]
 pylint = "*"
