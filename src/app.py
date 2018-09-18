@@ -17,12 +17,15 @@ class VideoApp(VideoViewer):
         # read video
         self.cap = cv2.VideoCapture(self.videopath)
         self.current_frame_idx = 0
-        self._render_frame(self.current_frame_idx)
+        self._update_frame(self.current_frame_idx)
 
         # # widget binding
         self.slider_video.setRange(0, self.frame_count)
+        self.slider_video.sliderMoved.connect(self.on_slider_moved)
+        self.slider_video.sliderReleased.connect(self.on_slider_released)
         # self.btn_play_video.clicked.connect(self.play_video)
         # self.slider_video.sliderMoved.connect(self.set_video_position)
+        self.show()
 
     @property
     def frame_count(self):
@@ -69,7 +72,11 @@ class VideoApp(VideoViewer):
                 return frame
             self.logger.exception('read #%d frame failed', frame_idx)
 
-    def _render_frame(self, frame_idx: int):
+    def _update_frame(self, frame_idx: int):
+        """read and update image to label
+        Arguments:
+            frame_idx {int} -- frame index
+        """
         frame = self._read_frame(frame_idx)
         if frame is not None:
             pixmap = QPixmap(self._ndarray_to_qimage(frame))
@@ -78,4 +85,16 @@ class VideoApp(VideoViewer):
             pixmap = pixmap.scaled(resize_w, resize_h, Qt.KeepAspectRatio)
             self.label_frame.setPixmap(pixmap)
             self.label_frame.resize(resize_w, resize_h)
-            self.show()
+            self._update_frame_status(self.current_frame_idx)
+
+    def _update_frame_status(self, frame_idx: int):
+        msg = '#frame ({}/{})'.format(frame_idx, self.frame_count)
+        self.label_video_status.setText(msg)
+    
+    @pyqtSlot()
+    def on_slider_released(self):
+        self._update_frame(self.slider_video.value())
+    
+    @pyqtSlot()
+    def on_slider_moved(self):
+        self._update_frame_status(frame_idx=self.slider_video.value())
