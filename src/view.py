@@ -45,6 +45,7 @@ class VideoViewer(QWidget):
 
         # vbox_panels
         self.label_frame = QLabel(self)
+        self.label_frame.setAlignment(Qt.AlignCenter)
         self.btn_play_video = QPushButton()
         self.btn_play_video.setEnabled(True)
         self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))

@@ -1,10 +1,11 @@
 import logging
+from time import sleep
 
 import cv2
 import numpy as np
-from PyQt5.QtCore import Qt, pyqtSlot
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QApplication, QMessageBox, QWidget
+from PyQt5.QtWidgets import QApplication, QMessageBox, QStyle, QWidget
 
 from .view import VideoViewer
 
@@ -16,15 +17,15 @@ class VideoApp(VideoViewer):
 
         # read video
         self.cap = cv2.VideoCapture(self.videopath)
-        self.current_frame_idx = 0
-        self._update_frame(self.current_frame_idx)
+        self.current_frame_idx = None
+        self.is_play_video = False
+        self._update_frame(0)
 
         # # widget binding
-        self.slider_video.setRange(0, self.frame_count)
+        self.slider_video.setRange(0, self.frame_count-1)
         self.slider_video.sliderMoved.connect(self.on_slider_moved)
         self.slider_video.sliderReleased.connect(self.on_slider_released)
-        # self.btn_play_video.clicked.connect(self.play_video)
-        # self.slider_video.sliderMoved.connect(self.set_video_position)
+        self.btn_play_video.clicked.connect(self.on_play_video_clicked)
         self.show()
 
     @property
@@ -77,24 +78,59 @@ class VideoApp(VideoViewer):
         Arguments:
             frame_idx {int} -- frame index
         """
-        frame = self._read_frame(frame_idx)
-        if frame is not None:
-            pixmap = QPixmap(self._ndarray_to_qimage(frame))
-            resize_w = int(min(pixmap.width(), self.screen.width()*0.8))
-            resize_h = int(pixmap.height() * (resize_w/pixmap.width()))
-            pixmap = pixmap.scaled(resize_w, resize_h, Qt.KeepAspectRatio)
-            self.label_frame.setPixmap(pixmap)
-            self.label_frame.resize(resize_w, resize_h)
-            self._update_frame_status(self.current_frame_idx)
+        if frame_idx != self.current_frame_idx:
+            frame = self._read_frame(frame_idx)
+            if frame is not None:
+                pixmap = QPixmap(self._ndarray_to_qimage(frame))
+                resize_w = int(min(pixmap.width(), self.screen.width()*0.8))
+                resize_h = int(pixmap.height() * (resize_w/pixmap.width()))
+                pixmap = pixmap.scaled(resize_w, resize_h, Qt.KeepAspectRatio)
+                self.label_frame.setPixmap(pixmap)
+                self.label_frame.resize(resize_w, resize_h)
+                self._update_frame_status(self.current_frame_idx)
+        
+        QTimer.singleShot(500, lambda: self._update_frame(self.current_frame_idx))
 
-    def _update_frame_status(self, frame_idx: int):
-        msg = '#frame ({}/{})'.format(frame_idx, self.frame_count)
+    def _update_frame_status(self, frame_idx: int, err: str = ''):
+        """update frame status
+        Arguments:
+            frame_idx {int} -- frame index
+
+        Keyword Arguments:
+            err {str} -- show status when exception (default: '')
+        """
+        msg = '#frame ({}/{})'.format(frame_idx, self.frame_count-1)
+        if err:
+            msg += '\n{}'.format(err)
         self.label_video_status.setText(msg)
-    
+
+    def _play_video(self):
+        """play video when button clicked"""
+        if self.is_play_video and self.video_fps:
+            frame_idx = min(self.current_frame_idx+1, self.frame_count)
+            if frame_idx == self.frame_count:
+                self.on_play_video_clicked()
+            else:
+                self._update_frame(frame_idx)
+                self.current_frame_idx = frame_idx
+        QTimer.singleShot(1/self.video_fps, self._play_video)
+
     @pyqtSlot()
     def on_slider_released(self):
+        """update frame and frame status when the slider released"""
         self._update_frame(self.slider_video.value())
-    
+
     @pyqtSlot()
     def on_slider_moved(self):
+        """update frame status only when the slider moved"""
         self._update_frame_status(frame_idx=self.slider_video.value())
+
+    @pyqtSlot()
+    def on_play_video_clicked(self):
+        """control to play or pause the video"""
+        self.is_play_video = not self.is_play_video
+        if self.is_play_video:
+            self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+            self._play_video()
+        else:
+            self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
