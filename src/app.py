@@ -3,6 +3,7 @@ from time import sleep
 
 import cv2
 import numpy as np
+import pandas as pd
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QApplication, QMessageBox, QStyle, QWidget
@@ -87,6 +88,7 @@ class VideoApp(VideoViewer):
                 self.label_frame.resize(resize_w, resize_h)
                 self._update_frame_status(self.target_frame_idx)
                 self.render_frame_idx = self.target_frame_idx
+                self.slider_video.setValue(self.render_frame_idx)
         
         QTimer.singleShot(1000/self.video_fps, self._update_frame)
 
