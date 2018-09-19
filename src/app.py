@@ -6,8 +6,8 @@ import cv2
 import numpy as np
 import pandas as pd
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
-from PyQt5.QtGui import QImage, QPixmap, QColor
-from PyQt5.QtWidgets import QApplication, QLabel, QMessageBox, QStyle, QWidget
+from PyQt5.QtGui import QColor, QImage, QPixmap
+from PyQt5.QtWidgets import QMessageBox, QStyle, QWidget
 
 from .view import VideoAppViewer
 
@@ -44,6 +44,7 @@ class VideoApp(VideoAppViewer):
         self.render_frame_idx = None    # redneded
         self.scale_height = self.scale_width = None
         self.is_playing_video = False
+        self._update_video_info()
         self._update_frame()
 
         # widget binding
@@ -54,6 +55,7 @@ class VideoApp(VideoAppViewer):
         self.label_frame.mousePressEvent = self.event_frame_mouse_press
         self.label_frame.mouseMoveEvent = self.event_frame_mouse_move
         self.label_frame.mouseReleaseEvent = self.event_frame_mouse_release
+        self.btn_export_records.clicked.connect(self.save_file)
         self.show()
 
     @property
@@ -100,6 +102,12 @@ class VideoApp(VideoAppViewer):
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 return frame
             self.logger.exception('read #%d frame failed', frame_idx)
+
+    def _update_video_info(self):
+        shape = str((self.frame_width, self.frame_height))
+        self.label_video_path.setText(self.videopath)
+        self.label_video_shape.setText(shape)
+        self.label_video_fps.setText(str(self.video_fps))
 
     def _update_frame(self):
         """read and update image to label"""
@@ -223,6 +231,21 @@ class VideoApp(VideoAppViewer):
             pt1, pt2 = (record['x1'], record['y1']), (record['x2'], record['y2'])
             cv2.rectangle(frame, pt1, pt2, self.label_color, self.label_thickness)
         return frame
+
+    def save_file(self):
+        """export records to default paths
+        - click ok only close message box
+        - click close to close PyQt program
+        """
+
+        self.exports()
+        info_msg = 'Save at <b>{}</b> <br/> total records: {}'.format(
+            self.outpath, len(self.records))
+        reply = QMessageBox.information(self, 'Save File', info_msg,
+                                        QMessageBox.Ok | QMessageBox.Close,
+                                        QMessageBox.Close)
+        if reply == QMessageBox.Close:
+            self.close()
 
     def exports(self):
         df_labels = pd.DataFrame().from_records(self.records)
