@@ -1,7 +1,14 @@
 title: 'PyQt5 video labeling viewer'
 author: 'afun'
 
-# label_color: label_color on RGB image
+# label_color: Qcolor object as label color
+# label_thickness: QPen thickness
+# label_style: QPen style
 # limit_nlabel: limited number of label per frame, no limit of the value is None
-label_color: !!python/tuple [255, 0, 0]
+label_color: !!python/object/apply:PyQt5.sip._unpickle_type
+  - PyQt5.QtGui
+  - QColor
+  - !!python/tuple [255, 0, 0, 255]
+label_thickness: 2
+label_style: !!python/object/apply:PyQt5.sip._unpickle_enum [PyQt5.QtCore, PenStyle, 1]
 limit_nlabel: 1

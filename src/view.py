@@ -1,7 +1,7 @@
 import logging
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette, QPixmap
+from PyQt5.QtGui import QFont, QPainter, QPalette, QPen, QPixmap, QColor
 from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget
 from PyQt5.QtWidgets import (QApplication, QDesktopWidget, QGridLayout,
@@ -9,8 +9,32 @@ from PyQt5.QtWidgets import (QApplication, QDesktopWidget, QGridLayout,
                              QSlider, QStyle, QVBoxLayout, QWidget)
 
 
-class VideoViewer(QWidget):
-    def __init__(self, title='PyQt5 video labeling viewer'):
+class VideoFrameViewer(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.logger = logging.getLogger(__name__)
+        self.is_drawing = False
+        self.pt1 = self.pt2 = None
+
+        self.pen_color = QColor(0, 0, 0)
+        self.pen_thickness = 1
+        self.pen_style = Qt.SolidLine
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.is_drawing:
+            painter = QPainter()
+            painter.begin(self)
+            pen = QPen(self.pen_color, self.pen_thickness, self.pen_style)
+            painter.setPen(pen)
+            pt1_x, pt1_y = self.pt1
+            width = self.pt2[0] - pt1_x
+            height = self.pt2[1] - pt1_y
+            painter.drawRect(pt1_x, pt1_y, width, height)
+            painter.end()
+
+class VideoAppViewer(QWidget):
+    def __init__(self, parent=None, title='PyQt5 video labeling viewer'):
         """init
 
         Arguments:
@@ -44,7 +68,7 @@ class VideoViewer(QWidget):
         self.setLayout(self.grid_root)
 
         # vbox_panels
-        self.label_frame = QLabel(self)
+        self.label_frame = VideoFrameViewer(self)
         self.label_frame.setAlignment(Qt.AlignCenter)
         self.btn_play_video = QPushButton()
         self.btn_play_video.setEnabled(True)

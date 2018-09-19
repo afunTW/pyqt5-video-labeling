@@ -6,13 +6,13 @@ import cv2
 import numpy as np
 import pandas as pd
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QApplication, QMessageBox, QStyle, QWidget
+from PyQt5.QtGui import QImage, QPixmap, QColor
+from PyQt5.QtWidgets import QApplication, QLabel, QMessageBox, QStyle, QWidget
 
-from .view import VideoViewer
+from .view import VideoAppViewer
 
 
-class VideoApp(VideoViewer):
+class VideoApp(VideoAppViewer):
     def __init__(self, videopath: str, outpath: str, **config):
         self.videopath = videopath
         self.outpath = outpath
@@ -21,12 +21,15 @@ class VideoApp(VideoViewer):
         super().__init__(title=self.title)
 
         # draw config
-        self.label_color = self.config.get('label_color', (0, 0, 0))
-        self.is_drawing = False
+        label_color = self.config.get('label_color', QColor(0, 0, 0))
+        label_thickness = self.config.get('label_thickness', 2)
+        label_style = self.config.get('label_style', Qt.SolidLine)
+        self.label_frame.pen_color = label_color
+        self.label_frame.pen_thickness = label_thickness
+        self.label_frame.pen_style = label_style
 
         # record config
         self.limit_nlabel = self.config.get('limit_nlabel', None)
-        self.pt1 = self.pt2 = None
         self.records = []
 
         # read video
@@ -42,9 +45,9 @@ class VideoApp(VideoViewer):
         self.slider_video.sliderMoved.connect(self.on_slider_moved)
         self.slider_video.sliderReleased.connect(self.on_slider_released)
         self.btn_play_video.clicked.connect(self.on_play_video_clicked)
-        self.label_frame.mousePressEvent = self.frame_mouse_press
-        self.label_frame.mouseMoveEvent = self.frame_mouse_move
-        self.label_frame.mouseReleaseEvent = self.frame_mouse_release
+        self.label_frame.mousePressEvent = self.event_frame_mouse_press
+        self.label_frame.mouseMoveEvent = self.event_frame_mouse_move
+        self.label_frame.mouseReleaseEvent = self.event_frame_mouse_release
         self.show()
 
     @property
@@ -134,7 +137,7 @@ class VideoApp(VideoViewer):
 
     def _check_coor_in_frame(self, coor_x: int, coor_y: int):
         """check the coordinate in mouse event"""
-        return 0 < coor_x < self.frame_width and 0 < coor_y < self.frame_height
+        return 0 < coor_x < self.scale_width and 0 < coor_y < self.scale_height
 
     def _nrecord_in_current_frame(self):
         if self.records:
@@ -162,39 +165,49 @@ class VideoApp(VideoViewer):
             self.btn_play_video.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
 
     @pyqtSlot()
-    def frame_mouse_press(self, event):
+    def event_frame_mouse_press(self, event):
         if self._check_coor_in_frame(event.x(), event.y()) and not self.is_playing_video:
             nrecords = self._nrecord_in_current_frame()
             if self.limit_nlabel and nrecords and self.limit_nlabel <= nrecords:
                 self.logger.warning('not available to add a new record (exist=%d, limit=%d)', \
                                     nrecords, self.limit_nlabel)
             else:
-                self.is_drawing = True
+                self.label_frame.is_drawing = True
                 self.logger.debug('press mouse at (%d, %d)', event.x(), event.y())
-                self.pt1 = (event.x(), event.y())
+                self.label_frame.pt1 = (event.x(), event.y())
 
     @pyqtSlot()
-    def frame_mouse_move(self, event):
-        if self.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
+    def event_frame_mouse_move(self, event):
+        if self.label_frame.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
             self.logger.debug('move mouse at (%d, %d)', event.x(), event.y())
+            self.label_frame.pt2 = (event.x(), event.y())
+            pt1 = (min(self.label_frame.pt1[0], self.label_frame.pt2[0]), \
+                   min(self.label_frame.pt1[1], self.label_frame.pt2[1]))
+            pt2 = (max(self.label_frame.pt1[0], self.label_frame.pt2[0]), \
+                   max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
+            self.label_frame.pt1, self.label_frame.pt2 = pt1, pt2
+            self.update()
 
     @pyqtSlot()
-    def frame_mouse_release(self, event):
-        if self.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
-            self.is_drawing = False
+    def event_frame_mouse_release(self, event):
+        if self.label_frame.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
+            self.label_frame.is_drawing = False
             self.logger.debug('release mouse at (%d, %d)', event.x(), event.y())
-            self.pt2 = (event.x(), event.y())
+            self.label_frame.pt2 = (event.x(), event.y())
             self.records.append(OrderedDict([
                 ('frame_idx', self.render_frame_idx), ('fps', self.video_fps),
                 ('frame_height', self.frame_height), ('frame_width', self.frame_width),
                 ('scale_height', self.scale_height), ('scale_width', self.scale_width),
-                ('x1', min(self.pt1[0], self.pt2[0])), ('y1', min(self.pt1[1], self.pt2[1])),
-                ('x2', max(self.pt1[0], self.pt2[0])), ('y2', max(self.pt1[1], self.pt2[1]))
+                ('x1', min(self.label_frame.pt1[0], self.label_frame.pt2[0])),
+                ('y1', min(self.label_frame.pt1[1], self.label_frame.pt2[1])),
+                ('x2', max(self.label_frame.pt1[0], self.label_frame.pt2[0])),
+                ('y2', max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
             ]))
-            self.pt1 = self.pt2 = None
+            self.label_frame.pt1 = self.label_frame.pt2 = None
 
     def exports(self):
         df_labels = pd.DataFrame().from_records(self.records)
+        print(df_labels)
         df_labels.to_csv(self.outpath, index=False)
 
     def keyPressEvent(self, event):
