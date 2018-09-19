@@ -21,14 +21,20 @@ class VideoApp(VideoAppViewer):
         super().__init__(title=self.title)
 
         # draw config
-        label_color = self.config.get('label_color', QColor(0, 0, 0))
-        label_thickness = self.config.get('label_thickness', 2)
-        label_style = self.config.get('label_style', Qt.SolidLine)
-        self.label_frame.pen_color = label_color
-        self.label_frame.pen_thickness = label_thickness
-        self.label_frame.pen_style = label_style
+        check_draw = self.config.get('draw')
+        draw_color = self.config['draw'].get('color', QColor(0, 0, 0)) if check_draw else None
+        draw_thickness = self.config['draw'].get('thickness', 2) if check_draw else None
+        draw_style = self.config['draw'].get('style', Qt.SolidLine) if check_draw else None
+        self.label_frame.pen_color = draw_color
+        self.label_frame.pen_thickness = draw_thickness
+        self.label_frame.pen_style = draw_style
 
         # record config
+        check_label = self.config.get('label')
+        label_color = self.config['label'].get('color', (0, 0, 0)) if check_label else None
+        label_thickness = self.config['label'].get('thickness', 2) if check_label else None
+        self.label_color = label_color
+        self.label_thickness = label_thickness
         self.limit_nlabel = self.config.get('limit_nlabel', None)
         self.records = []
 
@@ -100,12 +106,16 @@ class VideoApp(VideoAppViewer):
         if self.target_frame_idx != self.render_frame_idx:
             frame = self._read_frame(self.target_frame_idx)
             if frame is not None:
+                # draw, convert, resize pixmap
+                frame = self.draw_rects(self.target_frame_idx, frame)
                 pixmap = QPixmap(self._ndarray_to_qimage(frame))
                 self.scale_width = int(min(pixmap.width(), self.screen.width()*0.8))
                 self.scale_height = int(pixmap.height() * (self.scale_width / pixmap.width()))
                 pixmap = pixmap.scaled(self.scale_width, self.scale_height, Qt.KeepAspectRatio)
                 self.label_frame.setPixmap(pixmap)
                 self.label_frame.resize(self.scale_width, self.scale_height)
+
+                # sync, update related information
                 self._update_frame_status(self.target_frame_idx)
                 self.render_frame_idx = self.target_frame_idx
                 self.slider_video.setValue(self.render_frame_idx)
@@ -205,9 +215,17 @@ class VideoApp(VideoAppViewer):
             ]))
             self.label_frame.pt1 = self.label_frame.pt2 = None
 
+    def draw_rects(self, frame_idx: int, frame: np.ndarray):
+        rest_records = list(filter(lambda x: x['frame_idx'] == frame_idx, self.records))
+        if not rest_records:
+            return frame
+        for record in rest_records:
+            pt1, pt2 = (record['x1'], record['y1']), (record['x2'], record['y2'])
+            cv2.rectangle(frame, pt1, pt2, self.label_color, self.label_thickness)
+        return frame
+
     def exports(self):
         df_labels = pd.DataFrame().from_records(self.records)
-        print(df_labels)
         df_labels.to_csv(self.outpath, index=False)
 
     def keyPressEvent(self, event):
