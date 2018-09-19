@@ -55,6 +55,8 @@ class VideoApp(VideoAppViewer):
         self.label_frame.mousePressEvent = self.event_frame_mouse_press
         self.label_frame.mouseMoveEvent = self.event_frame_mouse_move
         self.label_frame.mouseReleaseEvent = self.event_frame_mouse_release
+        self.btn_previous_record.clicked.connect(self._jump_previous_record)
+        self.btn_next_record.clicked.connect(self._jump_next_record)
         self.btn_export_records.clicked.connect(self.save_file)
         self.show()
 
@@ -163,6 +165,22 @@ class VideoApp(VideoAppViewer):
             return len(rest) if rest else None
 
     @pyqtSlot()
+    def _jump_previous_record(self):
+        rest_records = list(filter(lambda x: x['frame_idx'] < self.render_frame_idx, self.records))
+        if not rest_records:
+            QMessageBox.information(self, 'Info', 'no previous record', QMessageBox.Ok)
+        else:
+            self.target_frame_idx = rest_records[-1]['frame_idx']
+
+    @pyqtSlot()
+    def _jump_next_record(self):
+        rest_records = list(filter(lambda x: x['frame_idx'] > self.render_frame_idx, self.records))
+        if not rest_records:
+            QMessageBox.information(self, 'Info', 'no next record', QMessageBox.Ok)
+        else:
+            self.target_frame_idx = rest_records[0]['frame_idx']
+
+    @pyqtSlot()
     def on_slider_released(self):
         """update frame and frame status when the slider released"""
         self.target_frame_idx = self.slider_video.value()
@@ -237,20 +255,16 @@ class VideoApp(VideoAppViewer):
         - click ok only close message box
         - click close to close PyQt program
         """
-
-        self.exports()
+        df_labels = pd.DataFrame().from_records(self.records)
+        df_labels.to_csv(self.outpath, index=False)
         info_msg = 'Save at <b>{}</b> <br/> total records: {}'.format(
             self.outpath, len(self.records))
-        reply = QMessageBox.information(self, 'Save File', info_msg,
+        reply = QMessageBox.information(self, 'Info', info_msg,
                                         QMessageBox.Ok | QMessageBox.Close,
                                         QMessageBox.Close)
         if reply == QMessageBox.Close:
             self.close()
-
-    def exports(self):
-        df_labels = pd.DataFrame().from_records(self.records)
-        df_labels.to_csv(self.outpath, index=False)
-
+    
     def keyPressEvent(self, event):
         """global keyboard event"""
         if event.key() in [Qt.Key_Space, Qt.Key_P]:

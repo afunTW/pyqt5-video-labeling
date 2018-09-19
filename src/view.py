@@ -116,6 +116,14 @@ class VideoAppViewer(QWidget):
         vbox_option.addWidget(self.tree_preview_records)
         vbox_option.addStretch(1)
 
+        # vbox_option/hbox_jump_records: jump to next or previous record
+        hbox_jump_records = QHBoxLayout()
+        self.btn_previous_record = QPushButton('<< Previous Record')
+        self.btn_next_record = QPushButton('Next Record >>')
+        hbox_jump_records.addWidget(self.btn_previous_record)
+        hbox_jump_records.addWidget(self.btn_next_record)
+        vbox_option.addLayout(hbox_jump_records)
+
         # vbox_option/btn_export: export records
         self.btn_export_records = QPushButton('Export')
         vbox_option.addWidget(self.btn_export_records)
