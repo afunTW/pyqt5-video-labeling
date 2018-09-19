@@ -16,8 +16,6 @@ def argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--video', dest='video')
     parser.add_argument('-c', '--config', dest='config', default=CONFIG_FILE)
-    parser.add_argument('--no-save', dest='save_label', action='store_false')
-    parser.set_defaults(save_label=True)
     return parser
 
 @func_profile
@@ -40,8 +38,6 @@ def main(args: argparse.Namespace):
     try:
         log_handler(video_app.logger)
         app.exec()
-        if args.save_label:
-            video_app.exports()
     except Exception as e:
         logger.exception(e)
 
