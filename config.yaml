@@ -13,8 +13,21 @@ draw:
   thickness: 2
   style: !!python/object/apply:PyQt5.sip._unpickle_enum [PyQt5.QtCore, PenStyle, 1]
 
+# select configuration for QPen - only show when selected
+# - color {Qcolor}: RGBA label color
+# - thickness {int}: QPen thickness
+# - style: QPen style
+select:
+  color: !!python/object/apply:PyQt5.sip._unpickle_type
+    - PyQt5.QtGui
+    - QColor
+    - !!python/tuple [255, 0, 255, 255]
+  thickness: 4
+  style: !!python/object/apply:PyQt5.sip._unpickle_enum [PyQt5.QtCore, PenStyle, 1]
+
 # label configuration for cv2 - show drawed recorded
 # - color {tuple}: RGB label color
+# - thickness {int}: label thickness
 label:
   color: !!python/tuple [0, 0, 255]
   thickness: 2

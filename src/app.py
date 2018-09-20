@@ -1,5 +1,6 @@
 import logging
 from collections import OrderedDict
+from copy import deepcopy
 from time import sleep
 
 import cv2
@@ -21,13 +22,16 @@ class VideoApp(VideoAppViewer):
         super().__init__(title=self.title)
 
         # draw config
-        check_draw = self.config.get('draw')
-        draw_color = self.config['draw'].get('color', QColor(0, 0, 0)) if check_draw else None
-        draw_thickness = self.config['draw'].get('thickness', 2) if check_draw else None
-        draw_style = self.config['draw'].get('style', Qt.SolidLine) if check_draw else None
-        self.label_frame.pen_color = draw_color
-        self.label_frame.pen_thickness = draw_thickness
-        self.label_frame.pen_style = draw_style
+        if self.config.get('draw') and isinstance(self.config['draw'], dict):
+            draw_config = self.config['draw']
+            self.label_frame.draw_color = draw_config.get('color', QColor(0, 0, 0))
+            self.label_frame.draw_thickness = draw_config.get('thickness', 2)
+            self.label_frame.draw_style = draw_config.get('style', Qt.SolidLine)
+        if self.config.get('select') and isinstance(self.config['select'], dict):
+            select_config = self.config['select']
+            self.label_frame.select_color = select_config.get('color', QColor(0, 0, 0))
+            self.label_frame.select_thickness = select_config.get('thickness', 3)
+            self.label_frame.select_style = select_config.get('style', Qt.SolidLine)
 
         # record config
         check_label = self.config.get('label')
@@ -44,6 +48,7 @@ class VideoApp(VideoAppViewer):
         self.render_frame_idx = None    # redneded
         self.scale_height = self.scale_width = None
         self.is_playing_video = False
+        self.is_force_update = False
         self._update_video_info()
         self._update_frame()
 
@@ -113,7 +118,8 @@ class VideoApp(VideoAppViewer):
 
     def _update_frame(self):
         """read and update image to label"""
-        if self.target_frame_idx != self.render_frame_idx:
+        if self.target_frame_idx != self.render_frame_idx or self.is_force_update:
+            self.is_force_update = False
             frame = self._read_frame(self.target_frame_idx)
             if frame is not None:
                 # draw, convert, resize pixmap
@@ -159,10 +165,42 @@ class VideoApp(VideoAppViewer):
         """check the coordinate in mouse event"""
         return 0 < coor_x < self.scale_width and 0 < coor_y < self.scale_height
 
+    def _get_records_by_frame_idx(self, frame_idx=None):
+        """return specfic records by frame index (default: current frame)"""
+        frame_idx = frame_idx or self.render_frame_idx
+        return list(filter(lambda x: x['frame_idx'] == frame_idx, self.records))
+
     def _nrecord_in_current_frame(self):
-        if self.records:
-            rest = list(filter(lambda x: x['frame_idx'] == self.render_frame_idx, self.records))
-            return len(rest) if rest else None
+        current_records = self._get_records_by_frame_idx()
+        return len(current_records) if current_records else None
+    
+    def _closest_record_in_current_frame(self, coor_x: int, coor_y: int):
+        current_records = deepcopy(self._get_records_by_frame_idx())
+        for rid, record in enumerate(current_records):
+            pt1, pt2 = (record['x1'], record['y1']), (record['x2'], record['y2'])
+            if pt1[0] < coor_x < pt2[0] and pt1[1] < coor_y < pt2[1]:
+                center = np.array(((pt2[0]+pt1[0])/2, (pt2[1]+pt1[1])/2))
+                dist = np.linalg.norm(center - np.array((coor_x, coor_y)))
+                current_records[rid]['dist'] = dist
+        current_records = list(filter(lambda x: 'dist' in x, current_records))
+        if current_records:
+            return sorted(current_records, key=lambda x: x['dist'])[0]
+    
+    def _remove_record(self, frame_idx: int, pt1: tuple, pt2: tuple):
+        """remove record by given value
+        Arguments:
+            frame_idx {int} -- record frame index
+            pt1 {tuple} -- record (x1, y1)
+            pt2 {tuple} -- record (x2, y2)
+        """
+        current_records = self._get_records_by_frame_idx(frame_idx)
+        target_record = None
+        for record in current_records:
+            src_pt1, src_pt2 = (record['x1'], record['y1']), (record['x2'], record['y2'])
+            if src_pt1 == pt1 and src_pt2 == pt2:
+                target_record = record
+        if target_record:
+            self.records.remove(target_record)
 
     @pyqtSlot()
     def _jump_previous_record(self):
@@ -202,15 +240,37 @@ class VideoApp(VideoAppViewer):
 
     @pyqtSlot()
     def event_frame_mouse_press(self, event):
+        """label frame press mouse event
+        - Qt.LeftButton: drawing
+        - Qt.RightButton: select to delete
+        Arguments:
+            event {PyQt5.QtGui.QMouseEvent} -- event object
+        """
         if self._check_coor_in_frame(event.x(), event.y()) and not self.is_playing_video:
-            nrecords = self._nrecord_in_current_frame()
-            if self.limit_nlabel and nrecords and self.limit_nlabel <= nrecords:
-                self.logger.warning('not available to add a new record (exist=%d, limit=%d)', \
-                                    nrecords, self.limit_nlabel)
-            else:
-                self.label_frame.is_drawing = True
-                self.logger.debug('press mouse at (%d, %d)', event.x(), event.y())
-                self.label_frame.pt1 = (event.x(), event.y())
+            if event.button() == Qt.LeftButton:
+                nrecords = self._nrecord_in_current_frame()
+                if self.limit_nlabel and nrecords and self.limit_nlabel <= nrecords:
+                    self.logger.warning('not available to add a new record (exist=%d, limit=%d)', \
+                                        nrecords, self.limit_nlabel)
+                else:
+                    self.label_frame.is_drawing = True
+                    self.label_frame.is_selecting = False
+                    self.logger.debug('press mouse at (%d, %d)', event.x(), event.y())
+                    self.label_frame.pt1 = (event.x(), event.y())
+            elif event.button() == Qt.RightButton:
+                closest_record = self._closest_record_in_current_frame(event.x(), event.y())
+                if closest_record:
+                    pt1 = (closest_record['x1'], closest_record['y1'])
+                    pt2 = (closest_record['x2'], closest_record['y2'])
+                    message = '<b>Do you want to delete the record ?</b><br/><br/> \
+                    frame index -\t{} <br/> position -\t{} {}'.format(
+                        closest_record['frame_idx'], str(pt1), str(pt2))
+                    reply = QMessageBox.question(self, 'Delete Record', message, \
+                                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                    if reply == QMessageBox.Yes:
+                        self._remove_record(closest_record['frame_idx'], pt1, pt2)
+                        self.is_force_update = True
+                        self.update()
 
     @pyqtSlot()
     def event_frame_mouse_move(self, event):
@@ -223,13 +283,24 @@ class VideoApp(VideoAppViewer):
                    max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
             self.label_frame.pt1, self.label_frame.pt2 = pt1, pt2
             self.update()
+        elif not self.label_frame.is_drawing and not self.is_playing_video:
+            closest_record = self._closest_record_in_current_frame(event.x(), event.y())
+            if closest_record:
+                self.label_frame.is_selecting = True
+                self.label_frame.select_pt1 = (closest_record['x1'], closest_record['y1'])
+                self.label_frame.select_pt2 = (closest_record['x2'], closest_record['y2'])
+            else:
+                self.label_frame.is_selecting = False
+                self.label_frame.select_pt1 = self.label_frame.select_pt2 = None
+            self.update()
 
     @pyqtSlot()
     def event_frame_mouse_release(self, event):
-        if self.label_frame.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
+        if self.label_frame.is_drawing:
             self.label_frame.is_drawing = False
             self.logger.debug('release mouse at (%d, %d)', event.x(), event.y())
-            self.label_frame.pt2 = (event.x(), event.y())
+            if self._check_coor_in_frame(event.x(), event.y()):
+                self.label_frame.pt2 = (event.x(), event.y())
             self.records.append(OrderedDict([
                 ('frame_idx', self.render_frame_idx), ('fps', self.video_fps),
                 ('frame_height', self.frame_height), ('frame_width', self.frame_width),
@@ -240,6 +311,8 @@ class VideoApp(VideoAppViewer):
                 ('y2', max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
             ]))
             self.label_frame.pt1 = self.label_frame.pt2 = None
+            self.is_force_update = True
+            self.update()
 
     def draw_rects(self, frame_idx: int, frame: np.ndarray):
         rest_records = list(filter(lambda x: x['frame_idx'] == frame_idx, self.records))

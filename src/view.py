@@ -1,8 +1,7 @@
 import logging
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import (QColor, QFont, QPainter, QPen, QPixmap,
-                         QStandardItemModel)
+from PyQt5.QtGui import QColor, QFont, QPainter, QPen, QStandardItemModel
 from PyQt5.QtWidgets import (QDesktopWidget, QGridLayout, QGroupBox,
                              QHBoxLayout, QLabel, QPushButton, QSlider, QStyle,
                              QTreeView, QVBoxLayout, QWidget)
@@ -13,27 +12,41 @@ class VideoFrameViewer(QLabel):
         super().__init__(parent=parent)
         self.logger = logging.getLogger(__name__)
         self.is_drawing = False
+        self.is_selecting = False
         self.pt1 = self.pt2 = None
+        self.select_pt1 = self.select_pt2 = None
 
-        self.pen_color = QColor(0, 0, 0)
-        self.pen_thickness = 1
-        self.pen_style = Qt.SolidLine
+        # case: draw config
+        self.draw_color = QColor(0, 0, 0)
+        self.draw_thickness = 1
+        self.draw_style = Qt.SolidLine
+
+        # case: select config
+        self.select_color = QColor(0, 0, 0)
+        self.select_thickness = 2
+        self.select_style = Qt.SolidLine
+
+    def _draw_rect(self, pt1: tuple, pt2: tuple, pen: QPen):
+        painter = QPainter()
+        painter.begin(self)
+        painter.setPen(pen)
+        pt1_x, pt1_y, pt2_x, pt2_y = pt1[0], pt1[1], pt2[0], pt2[1]
+        width, height = (pt2_x - pt1_x), (pt2_y - pt1_y)
+        painter.drawRect(pt1_x, pt1_y, width, height)
+        painter.end()
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        if self.is_drawing:
-            painter = QPainter()
-            painter.begin(self)
-            pen = QPen(self.pen_color, self.pen_thickness, self.pen_style)
-            painter.setPen(pen)
-            pt1_x, pt1_y = self.pt1
-            width = self.pt2[0] - pt1_x
-            height = self.pt2[1] - pt1_y
-            painter.drawRect(pt1_x, pt1_y, width, height)
-            painter.end()
+        if self.is_drawing and self.pt1 and self.pt2:
+            pen = QPen(self.draw_color, self.draw_thickness, self.draw_style)
+            self._draw_rect(self.pt1, self.pt2, pen)
+
+        elif not self.is_drawing and self.select_pt1 and self.select_pt2:
+            pen = QPen(self.select_color, self.select_thickness, self.select_style)
+            self._draw_rect(self.select_pt1, self.select_pt2, pen)
 
 class VideoAppViewer(QWidget):
-    def __init__(self, parent=None, title='PyQt5 video labeling viewer'):
+    def __init__(self, title='PyQt5 video labeling viewer'):
         """init
 
         Arguments:
@@ -65,6 +78,7 @@ class VideoAppViewer(QWidget):
         # vbox_panel/label_frame: show frame image
         self.label_frame = VideoFrameViewer(self)
         self.label_frame.setAlignment(Qt.AlignCenter)
+        self.label_frame.setMouseTracking(True)
         vbox_panels.addWidget(self.label_frame)
 
         # vbox_panel/hbox_video: show process about video
@@ -133,7 +147,7 @@ class VideoAppViewer(QWidget):
         label.setFont(self.font_header)
         label.setAlignment(Qt.AlignLeft)
         return label
-    
+
     def _get_preview_model(self, parent):
         model = QStandardItemModel(0, 2, parent)
         model.setHeaderData(0, Qt.Horizontal, '#Frame')
