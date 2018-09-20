@@ -301,7 +301,7 @@ class VideoApp(VideoAppViewer):
             self.logger.debug('release mouse at (%d, %d)', event.x(), event.y())
             if self._check_coor_in_frame(event.x(), event.y()):
                 self.label_frame.pt2 = (event.x(), event.y())
-            self.records.append(OrderedDict([
+            record = OrderedDict([
                 ('frame_idx', self.render_frame_idx), ('fps', self.video_fps),
                 ('frame_height', self.frame_height), ('frame_width', self.frame_width),
                 ('scale_height', self.scale_height), ('scale_width', self.scale_width),
@@ -309,7 +309,11 @@ class VideoApp(VideoAppViewer):
                 ('y1', min(self.label_frame.pt1[1], self.label_frame.pt2[1])),
                 ('x2', max(self.label_frame.pt1[0], self.label_frame.pt2[0])),
                 ('y2', max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
-            ]))
+            ])
+            self.records.append(record)
+            self.add_record_to_treeview(record['frame_idx'], \
+                                        (record['x1'], record['y1']), \
+                                        (record['x2'], record['y2']))
             self.label_frame.pt1 = self.label_frame.pt2 = None
             self.is_force_update = True
             self.update()

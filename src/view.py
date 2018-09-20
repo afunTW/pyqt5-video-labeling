@@ -2,9 +2,9 @@ import logging
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont, QPainter, QPen, QStandardItemModel
-from PyQt5.QtWidgets import (QDesktopWidget, QGridLayout, QGroupBox,
-                             QHBoxLayout, QLabel, QPushButton, QSlider, QStyle,
-                             QTreeView, QVBoxLayout, QWidget)
+from PyQt5.QtWidgets import (QAbstractItemView, QDesktopWidget, QGridLayout,
+                             QGroupBox, QHBoxLayout, QLabel, QPushButton,
+                             QSlider, QStyle, QTreeView, QVBoxLayout, QWidget)
 
 
 class VideoFrameViewer(QLabel):
@@ -127,8 +127,8 @@ class VideoAppViewer(QWidget):
         self.tree_preview_records.setAlternatingRowColors(True)
         self.model_preview_records = self._get_preview_model(self)
         self.tree_preview_records.setModel(self.model_preview_records)
+        self.tree_preview_records.setEditTriggers(QAbstractItemView.NoEditTriggers)
         vbox_option.addWidget(self.tree_preview_records)
-        vbox_option.addStretch(1)
 
         # vbox_option/hbox_jump_records: jump to next or previous record
         hbox_jump_records = QHBoxLayout()
