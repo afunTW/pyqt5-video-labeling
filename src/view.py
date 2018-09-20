@@ -156,11 +156,14 @@ class VideoAppViewer(QWidget):
         return model
     
     def add_record_to_treeview(self, frame_idx: int, pt1: tuple, pt2: tuple):
-        insert_row_index = self.model_preview_records.rowCount()
-        self.model_preview_records.insertRow(insert_row_index)
-        col1_index = self.model_preview_records.index(insert_row_index, 0)
-        col2_index = self.model_preview_records.index(insert_row_index, 1)
-        col3_index = self.model_preview_records.index(insert_row_index, 2)
+        self.model_preview_records.insertRow(0)
+        col1_index = self.model_preview_records.index(0, 0)
+        col2_index = self.model_preview_records.index(0, 1)
+        col3_index = self.model_preview_records.index(0, 2)
         self.model_preview_records.setData(col1_index, frame_idx)
         self.model_preview_records.setData(col2_index, str(pt1))
         self.model_preview_records.setData(col3_index, str(pt2))
+        self.model_preview_records.sort(0)
+    
+    def remove_record_in_treeview(self, row_idx: int):
+        self.model_preview_records.removeRow(row_idx)

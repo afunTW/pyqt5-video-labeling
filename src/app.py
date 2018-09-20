@@ -200,7 +200,9 @@ class VideoApp(VideoAppViewer):
             if src_pt1 == pt1 and src_pt2 == pt2:
                 target_record = record
         if target_record:
+            target_row_idx = self.records.index(target_record)
             self.records.remove(target_record)
+            self.remove_record_in_treeview(target_row_idx)
 
     @pyqtSlot()
     def _jump_previous_record(self):
@@ -311,6 +313,7 @@ class VideoApp(VideoAppViewer):
                 ('y2', max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
             ])
             self.records.append(record)
+            self.records = sorted(self.records, key=lambda x: x['frame_idx'])
             self.add_record_to_treeview(record['frame_idx'], \
                                         (record['x1'], record['y1']), \
                                         (record['x2'], record['y2']))
