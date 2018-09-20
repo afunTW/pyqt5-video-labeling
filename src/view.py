@@ -149,7 +149,18 @@ class VideoAppViewer(QWidget):
         return label
 
     def _get_preview_model(self, parent):
-        model = QStandardItemModel(0, 2, parent)
-        model.setHeaderData(0, Qt.Horizontal, '#Frame')
-        model.setHeaderData(1, Qt.Horizontal, '#Label')
+        model = QStandardItemModel(0, 3, parent)
+        model.setHeaderData(0, Qt.Horizontal, '#frame')
+        model.setHeaderData(1, Qt.Horizontal, 'pt1')
+        model.setHeaderData(2, Qt.Horizontal, 'pt2')
         return model
+    
+    def add_record_to_treeview(self, frame_idx: int, pt1: tuple, pt2: tuple):
+        insert_row_index = self.model_preview_records.rowCount()
+        self.model_preview_records.insertRow(insert_row_index)
+        col1_index = self.model_preview_records.index(insert_row_index, 0)
+        col2_index = self.model_preview_records.index(insert_row_index, 1)
+        col3_index = self.model_preview_records.index(insert_row_index, 2)
+        self.model_preview_records.setData(col1_index, frame_idx)
+        self.model_preview_records.setData(col2_index, str(pt1))
+        self.model_preview_records.setData(col3_index, str(pt2))
