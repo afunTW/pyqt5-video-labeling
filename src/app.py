@@ -1,6 +1,8 @@
 import logging
 from collections import OrderedDict
 from copy import deepcopy
+from datetime import datetime, timedelta
+from pathlib import Path
 from time import sleep
 
 import cv2
@@ -91,6 +93,20 @@ class VideoApp(VideoAppViewer):
         """
         return QImage(image, image.shape[1], image.shape[0], QImage.Format_RGB888)
 
+    def _frame_idx_to_hmsf(self, frame_idx: int):
+        """convert to hmsf timestamp by given frame idx and fps"""
+        assert self.video_fps
+        base = datetime.strptime('00:00:00.000000', '%H:%M:%S.%f')
+        delta = timedelta(seconds=frame_idx/self.video_fps)
+        return (base + delta).strftime('%H:%M:%S.%f')
+
+    def _frame_idx_to_hms(self, frame_idx: int):
+        """convert to hms timestamp by given frame idx and fps"""
+        assert self.video_fps
+        base = datetime.strptime('00:00:00', '%H:%M:%S')
+        delta = timedelta(seconds=frame_idx//self.video_fps)
+        return (base + delta).strftime('%H:%M:%S')
+
     def _read_frame(self, frame_idx: int):
         """check frame idx and read frame status than return frame
         Arguments:
@@ -109,6 +125,20 @@ class VideoApp(VideoAppViewer):
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 return frame
             self.logger.exception('read #%d frame failed', frame_idx)
+
+    def _play_video(self):
+        """play video when button clicked"""
+        if self.is_playing_video and self.video_fps:
+            frame_idx = min(self.render_frame_idx+1, self.frame_count)
+            if frame_idx == self.frame_count:
+                self.on_play_video_clicked()
+            else:
+                self.target_frame_idx = frame_idx
+        QTimer.singleShot(1/self.video_fps, self._play_video)
+
+    def _check_coor_in_frame(self, coor_x: int, coor_y: int):
+        """check the coordinate in mouse event"""
+        return 0 < coor_x < self.scale_width and 0 < coor_y < self.scale_height
 
     def _update_video_info(self):
         shape = str((self.frame_width, self.frame_height))
@@ -151,30 +181,25 @@ class VideoApp(VideoAppViewer):
             msg += '\n{}'.format(err)
         self.label_video_status.setText(msg)
 
-    def _play_video(self):
-        """play video when button clicked"""
-        if self.is_playing_video and self.video_fps:
-            frame_idx = min(self.render_frame_idx+1, self.frame_count)
-            if frame_idx == self.frame_count:
-                self.on_play_video_clicked()
-            else:
-                self.target_frame_idx = frame_idx
-        QTimer.singleShot(1/self.video_fps, self._play_video)
-
-    def _check_coor_in_frame(self, coor_x: int, coor_y: int):
-        """check the coordinate in mouse event"""
-        return 0 < coor_x < self.scale_width and 0 < coor_y < self.scale_height
-
     def _get_records_by_frame_idx(self, frame_idx=None):
         """return specfic records by frame index (default: current frame)"""
         frame_idx = frame_idx or self.render_frame_idx
         return list(filter(lambda x: x['frame_idx'] == frame_idx, self.records))
 
-    def _nrecord_in_current_frame(self):
+    def _get_nrecord_in_current_frame(self):
+        """get the number of records in current frame"""
         current_records = self._get_records_by_frame_idx()
         return len(current_records) if current_records else None
     
-    def _closest_record_in_current_frame(self, coor_x: int, coor_y: int):
+    def _get_closest_record_in_current_frame(self, coor_x: int, coor_y: int):
+        """get the closest record by given coor in current frame
+        Arguments:
+            coor_x {int} -- cooridinate x
+            coor_y {int} -- cooridinate
+
+        Returns:
+            {OrderedDict} -- the closest record
+        """
         current_records = deepcopy(self._get_records_by_frame_idx())
         for rid, record in enumerate(current_records):
             pt1, pt2 = (record['x1'], record['y1']), (record['x2'], record['y2'])
@@ -250,7 +275,7 @@ class VideoApp(VideoAppViewer):
         """
         if self._check_coor_in_frame(event.x(), event.y()) and not self.is_playing_video:
             if event.button() == Qt.LeftButton:
-                nrecords = self._nrecord_in_current_frame()
+                nrecords = self._get_nrecord_in_current_frame()
                 if self.limit_nlabel and nrecords and self.limit_nlabel <= nrecords:
                     self.logger.warning('not available to add a new record (exist=%d, limit=%d)', \
                                         nrecords, self.limit_nlabel)
@@ -260,7 +285,7 @@ class VideoApp(VideoAppViewer):
                     self.logger.debug('press mouse at (%d, %d)', event.x(), event.y())
                     self.label_frame.pt1 = (event.x(), event.y())
             elif event.button() == Qt.RightButton:
-                closest_record = self._closest_record_in_current_frame(event.x(), event.y())
+                closest_record = self._get_closest_record_in_current_frame(event.x(), event.y())
                 if closest_record:
                     pt1 = (closest_record['x1'], closest_record['y1'])
                     pt2 = (closest_record['x2'], closest_record['y2'])
@@ -281,7 +306,7 @@ class VideoApp(VideoAppViewer):
             self.label_frame.pt2 = (event.x(), event.y())
             self.update()
         elif not self.label_frame.is_drawing and not self.is_playing_video:
-            closest_record = self._closest_record_in_current_frame(event.x(), event.y())
+            closest_record = self._get_closest_record_in_current_frame(event.x(), event.y())
             if closest_record:
                 self.label_frame.is_selecting = True
                 self.label_frame.select_pt1 = (closest_record['x1'], closest_record['y1'])
@@ -300,15 +325,17 @@ class VideoApp(VideoAppViewer):
                 self.label_frame.pt2 = (event.x(), event.y())
             pt1, pt2 = self.label_frame.revise_coor(self.label_frame.pt1, self.label_frame.pt2)
             record = OrderedDict([
+                ('timestamp_hms', self._frame_idx_to_hms(self.render_frame_idx)),
+                ('timestamp_hmsf', self._frame_idx_to_hmsf(self.render_frame_idx)),
                 ('frame_idx', self.render_frame_idx), ('fps', self.video_fps),
                 ('frame_height', self.frame_height), ('frame_width', self.frame_width),
                 ('scale_height', self.scale_height), ('scale_width', self.scale_width),
-                ('x1', min(pt1[0], pt2[0])), ('y1', min(pt1[1], pt2[1])),
-                ('x2', max(pt1[0], pt2[0])), ('y2', max(pt1[1], pt2[1]))
+                ('x1', pt1[0]), ('y1', pt1[1]), ('x2', pt2[0]), ('y2', pt2[1]),
+                ('center_x', (pt1[0]+pt2[0])//2), ('center_y', (pt1[1]+pt2[1])//2)
             ])
             self.records.append(record)
             self.records = sorted(self.records, key=lambda x: x['frame_idx'])
-            self.add_record_to_treeview(record['frame_idx'], \
+            self.add_record_to_treeview(record['timestamp_hms'], record['frame_idx'], \
                                         (record['x1'], record['y1']), \
                                         (record['x2'], record['y2']))
             self.label_frame.pt1 = self.label_frame.pt2 = None
@@ -329,15 +356,23 @@ class VideoApp(VideoAppViewer):
         - click ok only close message box
         - click close to close PyQt program
         """
-        df_labels = pd.DataFrame().from_records(self.records)
-        df_labels.to_csv(self.outpath, index=False)
-        info_msg = 'Save at <b>{}</b> <br/> total records: {}'.format(
-            self.outpath, len(self.records))
-        reply = QMessageBox.information(self, 'Info', info_msg,
-                                        QMessageBox.Ok | QMessageBox.Close,
-                                        QMessageBox.Close)
-        if reply == QMessageBox.Close:
-            self.close()
+        exist_msg = 'File <b>{}</b> exist.<br/><br/>\
+                         Do you want to replace?'.format(self.outpath)
+        info_msg = 'Save at <b>{}</b><br/>\
+                    total records: {}'.format(self.outpath, len(self.records))
+
+        # check the file existense
+        exist_reply = QMessageBox.No
+        if Path(self.outpath).exists():
+            exist_reply = QMessageBox.question(self, 'File Exist', exist_msg, \
+                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if not Path(self.outpath).exists() or exist_reply == QMessageBox.Yes:
+            df_labels = pd.DataFrame().from_records(self.records)
+            df_labels.to_csv(self.outpath, index=False)
+
+        # check if the application is going to close
+        reply = QMessageBox.about(self, 'Info', info_msg)
+        self.close()
     
     def keyPressEvent(self, event):
         """global keyboard event"""
