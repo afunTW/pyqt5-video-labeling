@@ -65,6 +65,8 @@ class VideoApp(VideoAppViewer):
         self.btn_previous_record.clicked.connect(self._jump_previous_record)
         self.btn_next_record.clicked.connect(self._jump_next_record)
         self.btn_export_records.clicked.connect(self.save_file)
+        self.table_preview_records.itemDoubleClicked.connect(
+            self.event_preview_item_double_clicked)
         self.show()
 
     @property
@@ -227,7 +229,7 @@ class VideoApp(VideoAppViewer):
         if target_record:
             target_row_idx = self.records.index(target_record)
             self.records.remove(target_record)
-            self.remove_record_in_treeview(target_row_idx)
+            self.remove_record_from_preview(target_row_idx)
 
     @pyqtSlot()
     def _jump_previous_record(self):
@@ -335,12 +337,19 @@ class VideoApp(VideoAppViewer):
             ])
             self.records.append(record)
             self.records = sorted(self.records, key=lambda x: x['frame_idx'])
-            self.add_record_to_treeview(record['timestamp_hms'], record['frame_idx'], \
-                                        (record['x1'], record['y1']), \
-                                        (record['x2'], record['y2']))
+            self.add_record_to_preview(record['timestamp_hms'], \
+                                       record['frame_idx'], \
+                                       (record['x1'], record['y1']), \
+                                       (record['x2'], record['y2']))
             self.label_frame.pt1 = self.label_frame.pt2 = None
             self.is_force_update = True
             self.update()
+
+    @pyqtSlot()
+    def event_preview_item_double_clicked(self):
+        row = self.table_preview_records.currentRow()
+        frame_idx = int(self.table_preview_records.item(row, 1).text())
+        self.target_frame_idx = frame_idx
 
     def draw_rects(self, frame_idx: int, frame: np.ndarray):
         rest_records = list(filter(lambda x: x['frame_idx'] == frame_idx, self.records))
