@@ -279,11 +279,6 @@ class VideoApp(VideoAppViewer):
         if self.label_frame.is_drawing and self._check_coor_in_frame(event.x(), event.y()):
             self.logger.debug('move mouse at (%d, %d)', event.x(), event.y())
             self.label_frame.pt2 = (event.x(), event.y())
-            pt1 = (min(self.label_frame.pt1[0], self.label_frame.pt2[0]), \
-                   min(self.label_frame.pt1[1], self.label_frame.pt2[1]))
-            pt2 = (max(self.label_frame.pt1[0], self.label_frame.pt2[0]), \
-                   max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
-            self.label_frame.pt1, self.label_frame.pt2 = pt1, pt2
             self.update()
         elif not self.label_frame.is_drawing and not self.is_playing_video:
             closest_record = self._closest_record_in_current_frame(event.x(), event.y())
@@ -303,14 +298,13 @@ class VideoApp(VideoAppViewer):
             self.logger.debug('release mouse at (%d, %d)', event.x(), event.y())
             if self._check_coor_in_frame(event.x(), event.y()):
                 self.label_frame.pt2 = (event.x(), event.y())
+            pt1, pt2 = self.label_frame.revise_coor(self.label_frame.pt1, self.label_frame.pt2)
             record = OrderedDict([
                 ('frame_idx', self.render_frame_idx), ('fps', self.video_fps),
                 ('frame_height', self.frame_height), ('frame_width', self.frame_width),
                 ('scale_height', self.scale_height), ('scale_width', self.scale_width),
-                ('x1', min(self.label_frame.pt1[0], self.label_frame.pt2[0])),
-                ('y1', min(self.label_frame.pt1[1], self.label_frame.pt2[1])),
-                ('x2', max(self.label_frame.pt1[0], self.label_frame.pt2[0])),
-                ('y2', max(self.label_frame.pt1[1], self.label_frame.pt2[1]))
+                ('x1', min(pt1[0], pt2[0])), ('y1', min(pt1[1], pt2[1])),
+                ('x2', max(pt1[0], pt2[0])), ('y2', max(pt1[1], pt2[1]))
             ])
             self.records.append(record)
             self.records = sorted(self.records, key=lambda x: x['frame_idx'])

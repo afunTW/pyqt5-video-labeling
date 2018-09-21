@@ -26,6 +26,11 @@ class VideoFrameViewer(QLabel):
         self.select_thickness = 2
         self.select_style = Qt.SolidLine
 
+    def revise_coor(self, pt1: tuple, pt2: tuple):
+        revise_pt1 = (min(pt1[0], pt2[0]), min(pt1[1], pt2[1]))
+        revise_pt2 = (max(pt1[0], pt2[0]), max(pt1[1], pt2[1]))
+        return (revise_pt1, revise_pt2)
+
     def _draw_rect(self, pt1: tuple, pt2: tuple, pen: QPen):
         painter = QPainter()
         painter.begin(self)
@@ -39,11 +44,13 @@ class VideoFrameViewer(QLabel):
         super().paintEvent(event)
         if self.is_drawing and self.pt1 and self.pt2:
             pen = QPen(self.draw_color, self.draw_thickness, self.draw_style)
-            self._draw_rect(self.pt1, self.pt2, pen)
+            pt1, pt2 = self.revise_coor(self.pt1, self.pt2)
+            self._draw_rect(pt1, pt2, pen)
 
         elif not self.is_drawing and self.select_pt1 and self.select_pt2:
             pen = QPen(self.select_color, self.select_thickness, self.select_style)
-            self._draw_rect(self.select_pt1, self.select_pt2, pen)
+            pt1, pt2 = self.revise_coor(self.select_pt1, self.select_pt2)
+            self._draw_rect(pt1, pt2, pen)
 
 class VideoAppViewer(QWidget):
     def __init__(self, title='PyQt5 video labeling viewer'):
