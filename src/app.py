@@ -62,11 +62,10 @@ class VideoApp(VideoAppViewer):
         self.label_frame.mousePressEvent = self.event_frame_mouse_press
         self.label_frame.mouseMoveEvent = self.event_frame_mouse_move
         self.label_frame.mouseReleaseEvent = self.event_frame_mouse_release
-        self.btn_previous_record.clicked.connect(self._jump_previous_record)
-        self.btn_next_record.clicked.connect(self._jump_next_record)
+        self.btn_previous_record.clicked.connect(self._goto_previous_record)
+        self.btn_next_record.clicked.connect(self._goto_next_record)
         self.btn_export_records.clicked.connect(self.save_file)
-        self.table_preview_records.itemDoubleClicked.connect(
-            self.event_preview_item_double_clicked)
+        self.table_preview_records.doubleClicked.connect(self.event_preview_double_clicked)
         self.show()
 
     @property
@@ -232,7 +231,7 @@ class VideoApp(VideoAppViewer):
             self.remove_record_from_preview(target_row_idx)
 
     @pyqtSlot()
-    def _jump_previous_record(self):
+    def _goto_previous_record(self):
         rest_records = list(filter(lambda x: x['frame_idx'] < self.render_frame_idx, self.records))
         if not rest_records:
             QMessageBox.information(self, 'Info', 'no previous record', QMessageBox.Ok)
@@ -240,7 +239,7 @@ class VideoApp(VideoAppViewer):
             self.target_frame_idx = rest_records[-1]['frame_idx']
 
     @pyqtSlot()
-    def _jump_next_record(self):
+    def _goto_next_record(self):
         rest_records = list(filter(lambda x: x['frame_idx'] > self.render_frame_idx, self.records))
         if not rest_records:
             QMessageBox.information(self, 'Info', 'no next record', QMessageBox.Ok)
@@ -346,7 +345,7 @@ class VideoApp(VideoAppViewer):
             self.update()
 
     @pyqtSlot()
-    def event_preview_item_double_clicked(self):
+    def event_preview_double_clicked(self):
         row = self.table_preview_records.currentRow()
         frame_idx = int(self.table_preview_records.item(row, 1).text())
         self.target_frame_idx = frame_idx

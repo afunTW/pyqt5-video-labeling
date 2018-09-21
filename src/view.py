@@ -165,6 +165,7 @@ class VideoAppViewer(QWidget):
         table.setHorizontalHeaderLabels(['timestamp', 'frame', 'pt1', 'pt2'])
         table.setSortingEnabled(False)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
         return table
     
     def add_record_to_preview(self, timestamp: str, frame_idx: int, pt1: tuple, pt2: tuple):
