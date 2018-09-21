@@ -16,6 +16,7 @@ def argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--video', dest='video')
     parser.add_argument('-c', '--config', dest='config', default=CONFIG_FILE)
+    parser.add_argument('-o', '--output', dest='output')
     return parser
 
 @func_profile
@@ -32,6 +33,9 @@ def main(args: argparse.Namespace):
     if not output_path.exists():
         output_path.mkdir(parents=True)
     label_path = output_path / '{}_label.csv'.format(video_path.stem)
+    label_path = output_path / str(Path(args.output)) if args.output else label_path
+    if not label_path.parent.exists():
+        label_path.parent.mkdir(parents=True)
 
     app = QApplication(sys.argv)
     video_app = VideoApp(args.video, str(label_path), **config)
